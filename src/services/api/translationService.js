@@ -87,9 +87,7 @@ class TranslationService {
     await new Promise(resolve => setTimeout(resolve, 500));
   }
 
-  async translate(text, sourceLang, targetLang) {
-    await this.delay();
-    
+async translate(text, sourceLang, targetLang) {
     if (!text || !text.trim()) {
       throw new Error("Text is required for translation");
     }
@@ -98,36 +96,75 @@ class TranslationService {
       throw new Error("Source and target languages cannot be the same");
     }
 
-    // Simulate API translation with mock data
-    const translationKey = sourceLang === "auto" ? `en-${targetLang}` : `${sourceLang}-${targetLang}`;
-    const textLower = text.toLowerCase().trim();
-    
-    let translatedText = text;
-    
-    if (this.mockTranslations[translationKey]) {
-      const translation = this.mockTranslations[translationKey][textLower];
-      if (translation) {
-        translatedText = translation;
+    try {
+      // Construct Google Translate API URL
+      const apiUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sourceLang}&tl=${targetLang}&dt=t&q=${encodeURIComponent(text.trim())}`;
+      
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Translation API error: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      // Parse Google Translate response format
+      // Response format: [[[translated_text, original_text, null, null, confidence]], null, source_lang, null, null, null, confidence]
+      let translatedText = text;
+      
+      if (data && data[0] && Array.isArray(data[0])) {
+        translatedText = data[0].map(item => item[0]).join('');
+      }
+
+      const translation = {
+        Id: this.getNextId(),
+        sourceText: text,
+        translatedText: translatedText,
+        sourceLang: sourceLang,
+        targetLang: targetLang,
+        timestamp: new Date().toISOString()
+      };
+
+      this.translations.push(translation);
+      return { ...translation };
+      
+    } catch (error) {
+      // Fallback to mock translation if API fails
+      console.warn('Google Translate API failed, using mock translation:', error.message);
+      
+      const translationKey = sourceLang === "auto" ? `en-${targetLang}` : `${sourceLang}-${targetLang}`;
+      const textLower = text.toLowerCase().trim();
+      
+      let translatedText = text;
+      
+      if (this.mockTranslations[translationKey]) {
+        const mockTranslation = this.mockTranslations[translationKey][textLower];
+        if (mockTranslation) {
+          translatedText = mockTranslation;
+        } else {
+          translatedText = this.generateMockTranslation(text, targetLang);
+        }
       } else {
-        // Generate a mock translation for unknown text
         translatedText = this.generateMockTranslation(text, targetLang);
       }
-    } else {
-      // Generate a mock translation for unsupported language pairs
-      translatedText = this.generateMockTranslation(text, targetLang);
+
+      const translation = {
+        Id: this.getNextId(),
+        sourceText: text,
+        translatedText: translatedText,
+        sourceLang: sourceLang,
+        targetLang: targetLang,
+        timestamp: new Date().toISOString()
+      };
+
+      this.translations.push(translation);
+      return { ...translation };
     }
-
-    const translation = {
-      Id: this.getNextId(),
-      sourceText: text,
-      translatedText: translatedText,
-      sourceLang: sourceLang,
-      targetLang: targetLang,
-      timestamp: new Date().toISOString()
-    };
-
-    this.translations.push(translation);
-    return { ...translation };
   }
 
   generateMockTranslation(text, targetLang) {
