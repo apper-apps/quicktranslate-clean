@@ -111,14 +111,28 @@ async translate(text, sourceLang, targetLang) {
         throw new Error(`Translation API error: ${response.status} ${response.statusText}`);
       }
 
-      const data = await response.json();
+const data = await response.json();
       
-      // Parse Google Translate response format
+      // Parse Google Translate response format using structured list selection
       // Response format: [[[translated_text, original_text, null, null, confidence]], null, source_lang, null, null, null, confidence]
       let translatedText = text;
       
-      if (data && data[0] && Array.isArray(data[0])) {
-        translatedText = data[0].map(item => item[0]).join('');
+      // Implement "select list item list" pattern - get first item from first list
+      if (data && Array.isArray(data) && data.length > 0) {
+        // Select list item (index 1) from main response array
+        const translationList = data[0];
+        
+        if (Array.isArray(translationList) && translationList.length > 0) {
+          // Select list item (index 1) from translation segments
+          const firstTranslationSegment = translationList[0];
+          
+          if (Array.isArray(firstTranslationSegment) && firstTranslationSegment.length > 0) {
+            // Extract translated text (first item in segment)
+            translatedText = translationList.map(item => 
+              Array.isArray(item) && item.length > 0 ? item[0] : ''
+            ).join('');
+          }
+        }
       }
 
       const translation = {
